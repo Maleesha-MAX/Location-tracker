@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Location Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+
+<body class="bg-gray-100 text-gray-800">
+  <header class="bg-blue-600 text-white py-4">
+    <h1 class="text-center text-2xl font-bold">Location Tracker</h1>
+  </header>
+
+  <main class="container mx-auto p-4">
+    <!-- Search System -->
+    <div class="flex flex-col items-center mb-4">
+      <div class="flex w-full max-w-md">
+        <input id="search-input" type="text" placeholder="Search for a location"
+          class="px-4 py-2 border rounded-l-md shadow-md w-full outline-none">
+        <button id="search-btn" class="px-4 py-2 bg-blue-500 text-white rounded-r-md shadow-md hover:bg-blue-600">
+          Search
+        </button>
+      </div>
+      <ul id="search-results" class="w-full max-w-md bg-white shadow-md rounded-md mt-2"></ul>
+    </div>
+
+    <!-- Get Current Location -->
+    <div class="flex justify-center mb-4 space-x-4">
+      <button id="get-location" class="px-4 py-2 bg-green-500 text-white rounded-md shadow-md hover:bg-green-600">
+        Get Current Location
+      </button>
+      <button id="open-google-maps" class="px-4 py-2 bg-red-500 text-white rounded-md shadow-md hover:bg-red-600 hidden">
+        Open in Google Maps
+      </button>
+    </div>
+    <div id="message" class="text-center text-red-600 mb-4"></div>
+
+    <!-- Map Container -->
+    <div id="map" class="h-[500px] rounded-md shadow-lg"></div>
+  </main>
+
+  <footer class="bg-blue-600 text-white text-center py-4">
+    <p>© 2024 Location Tracker | Powered by Electron & Leaflet</p>
+  </footer>
+
+  <script>
+    const map = L.map('map').setView([51.505, -0.09], 13);
+    let currentLatitude = 51.505;
+    let currentLongitude = -0.09;
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    const marker = L.marker([51.505, -0.09]).addTo(map);
+
+    const searchResults = document.getElementById('search-results');
+    const messageDiv = document.getElementById('message');
+    const googleMapsBtn = document.getElementById('open-google-maps');
+
+    // Function to update current location and Google Maps button
+    function updateLocation(lat, lon, displayName = '') {
+      currentLatitude = lat;
+      currentLongitude = lon;
+      map.setView([lat, lon], 15);
+      marker.setLatLng([lat, lon]);
+      
+      // Show and enable Google Maps button
+      googleMapsBtn.classList.remove('hidden');
+      googleMapsBtn.disabled = false;
+      
+      // Update message with location details
+      if (displayName) {
+        messageDiv.textContent = `Location: ${displayName}`;
+      } else {
+        messageDiv.textContent = `Current location: Latitude ${lat}, Longitude ${lon}`;
+      }
+      messageDiv.className = "text-center text-green-600 mb-4";
+    }
+
+    // Open Google Maps button
+    googleMapsBtn.addEventListener('click', () => {
+      const googleMapsUrl = `https://www.google.com/maps?q=${currentLatitude},${currentLongitude}`;
+      window.open(googleMapsUrl, '_blank');
+    });
+
+    // Search System
+    document.getElementById('search-btn').addEventListener('click', () => {
+      const query = document.getElementById('search-input').value;
+      searchResults.innerHTML = ''; // Clear previous results
+
+      if (query) {
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
+          .then(response => response.json())
+          .then(data => {
+            if (data.length > 0) {
+              data.forEach(location => {
+                const listItem = document.createElement('li');
+                listItem.className = 'p-2 border-b hover:bg-gray-100 cursor-pointer';
+                listItem.textContent = location.display_name;
+                listItem.addEventListener('click', () => {
+                  const { lat, lon, display_name } = location;
+                  updateLocation(parseFloat(lat), parseFloat(lon), display_name);
+                  searchResults.innerHTML = ''; // Clear results
+                });
+                searchResults.appendChild(listItem);
+              });
+            } else {
+              alert('Location not found. Please try again.');
+            }
+          })
+          .catch(() => alert('Error fetching location data.'));
+      } else {
+        alert('Please enter a location to search.');
+      }
+    });
+
+    // Get Current Location Button
+    document.getElementById('get-location').addEventListener('click', () => {
+      messageDiv.textContent = ''; // Clear previous messages
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            updateLocation(latitude, longitude);
+          },
+          (error) => {
+            if (error.code === error.PERMISSION_DENIED) {
+              messageDiv.textContent = 'Location access denied. Please enable location services.';
+            } else if (error.code === error.POSITION_UNAVAILABLE) {
+              messageDiv.textContent = 'Location information is unavailable.';
+            } else if (error.code === error.TIMEOUT) {
+              messageDiv.textContent = 'The request to get your location timed out.';
+            } else {
+              messageDiv.textContent = 'An unknown error occurred while retrieving your location.';
+            }
+            messageDiv.className = "text-center text-red-600 mb-4";
+            
+            // Hide Google Maps button on error
+            googleMapsBtn.classList.add('hidden');
+          }
+        );
+      } else {
+        messageDiv.textContent = 'Geolocation is not supported by this browser.';
+        messageDiv.className = "text-center text-red-600 mb-4";
+        
+        // Hide Google Maps button if geolocation is not supported
+        googleMapsBtn.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+
+</html>
